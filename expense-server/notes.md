@@ -1,14 +1,21 @@
-# SERVER.JS HAS BASIC LOGIN/REGISTER RUNNING
+# SERVER.JS is now handling EXPRESS, MONGODB connection initialization + routing to authRoutes & groupRoutes
 
 ## SRC
-### MiddleWare :intercet every request that is coming to the server, it will take that request(json) and conver it into js object, execute what ever func. that is passed
 
-### CONTROLLERS ARE THE ENTRY PART OF THE SYSTEM, IT CAN FURTHER CALL FUNCTIONS IN DAO ETC.
+### MiddleWare :intercet every request to the server, it will use request(json) to js object, execute the required func.
+### CONTROLLERS are the ENTRY point of the system, it calls functionalities of DAO file.
+### ROUTER are used to set/define the routes of our web app
+### DAO called by the controllers to handle data(CRUD) , i.e. direct communication with DB [Functionalitites visible from the frontEnd]
+### MODEL : user(collection) schema definition etc.
 
-### ROUTER ARE USED TO DEFINE(SET) THE ROUTING FOR OUR EXPRESS FRAMEWORK
+#### API(link/UI) -> server.js -> authRoutes-> authController <-> userDao <-> user.js
+####                                               ^ return JW-token via cookies @login
+#### API(link/UI) -> server.js -> (authMiddleWare)-> groupRoutes -> groupController <-> groupDao <-> group.js
+####                                 ^ JWT authentication
 
-### DAO called by the controllers to handle data(CRUD)
+## HTTP CODES : 1xx(info exchange), 2xx(success), 4xx(user error), 5xx(server error)
 
-### MODEL : USER SCHEMA DETAILS ETC ARE STORED
-
-## HTTP CODES : 2xx(success), 4xx(user error), 5xx(server error)
+## Json Web Token (jwt (token) has 3 individually encrypted components)
+### 1. Secret : random string(kinda encryption key)
+### 2. Data/Payload : Infomation to be transferred
+### 3. Signature/Expiry : session duration time..

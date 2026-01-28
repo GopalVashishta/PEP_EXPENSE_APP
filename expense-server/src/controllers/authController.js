@@ -1,5 +1,7 @@
+require('dotenv').config();
 const userDao = require('../dao/userDao');
 const bcrypt = require('bcryptjs');//encryption
+const jwt = require('jsonwebtoken');
 
 const authController = {
     login: async (req, resp) => {
@@ -8,6 +10,13 @@ const authController = {
         const user = await userDao.findByEmail(email);
         
         if(user && await bcrypt.compare(password, user.password)) {
+            const token = jwt.sign({
+                name: user.name,
+                email: user.email,
+                id: user._id,
+            }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
+            resp.cookie('jwtToken', token, { httpOnly: true, secure: true, domain: 'localhost', path: '/' }); 
+
             return resp.status(200).json({ message: "User Authnticated", user: user });
         }
         else {
