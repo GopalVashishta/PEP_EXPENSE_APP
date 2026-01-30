@@ -62,6 +62,35 @@ const authController = {
             });
 
         return resp.status(201).json({ message: "User registered successfully", user: newUser.id });
+    },
+
+    isUserLoggedIn: async (req, resp) => {
+        try{
+            const token = req.cookies?.jwtToken;
+            if(!token) {
+                return resp.status(200).json({ loggedIn: false });
+            }
+            jwt.verify(token, process.env.JWT_SECRET_KEY, (error, user) => {
+                if(error) {
+                    return resp.status(401).json({ messaage: "Invalid token" });
+                }
+            return resp.status(200).json({ user: user });
+            });
+        }
+        catch(err){
+            console.log("Error verifying user token", err);
+            return resp.status(500).json({ message: "Internal Server Error" });
+        }
+    },
+    logout: async (req, resp) => {
+        try{
+            resp.clearCookie('jwtToken', { httpOnly: true, secure: true, domain: 'localhost', path: '/' });
+            resp.json({ message: "Logout successful" });
+        }
+        catch(error){
+            console.log(error);
+            return resp.status(500).json({messaage: "Internal Server Error"});
+        }
     }
 }
 module.exports  = authController;

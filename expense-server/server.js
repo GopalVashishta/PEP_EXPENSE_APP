@@ -4,6 +4,7 @@ const mongoose =  require('mongoose');//to connect to mongoDB
 const authRoutes = require('./src/routes/authRoutes');
 const groupRoutes = require('./src/routes/groupRoutes');
 const cookieParser = require('cookie-parser');
+const cors = require('cors'); //cors policy error by the browser @frontend
 const PORT = 5001;
 const app = express();
 
@@ -12,8 +13,14 @@ mongoose
   .then(() => { console.log("Connected to MongoDB"); })
   .catch((err) => { console.log("Error connecting to MongoDB", err); });
 
-app.use(express.json()); //MiddleWare (intercet every request that is coming to the server)
-app.use(cookieParser()); // parse signed/unsigned cookies for auth
+const corsOptions = {
+  origin: process.env.CLIENT_URL,
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.use(express.json()); //MiddleWare converts json to jsobj
+app.use(cookieParser()); // cookies to js obj
 app.use('/auth', authRoutes);
 app.use('/group', groupRoutes);
 
