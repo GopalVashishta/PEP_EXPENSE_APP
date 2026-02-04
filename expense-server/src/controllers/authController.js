@@ -5,6 +5,24 @@ const jwt = require('jsonwebtoken');
 const {OAuth2Client} = require('google-auth-library');
 const emailer = require('../services/emailServices');
 const {validationResult} = require('express-validator');
+const crypto = require('crypto');
+
+// OTP Configuration
+const OTP_LENGTH = 6;
+const OTP_EXPIRY_MINUTES = 10;
+const MAX_OTP_ATTEMPTS = 5;
+const OTP_RATE_LIMIT_MINUTES = 1; // Minimum time between OTP requests
+
+// Generate cryptographically secure OTP
+const generateOtp = () => {
+    const digits = '0123456789';
+    let otp = '';
+    const randomBytes = crypto.randomBytes(OTP_LENGTH);
+    for (let i = 0; i < OTP_LENGTH; i++) {
+        otp += digits[randomBytes[i] % 10];
+    }
+    return otp;
+};
 
 const authController = {
     login: async (req, resp) => {
@@ -23,8 +41,15 @@ const authController = {
                     email: user.email,
                     id: user._id,
                 }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
-                resp.cookie('jwtToken', token, { httpOnly: true, secure: true, domain: 'localhost', path: '/' }); 
 
+                const refreshToken = jwt.sign({
+                    name: user.name,
+                    email: user.email,
+                    id: user._id,
+                }, process.env.JWT_SECRET_KEY, { expiresIn: '7d' });
+
+                resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
+                resp.cookie('refreshToken', refreshToken, { httpOnly: true, secure: false, path: '/' });
                 return resp.status(200).json({ message: "User Authnticated", user: user });
             }
             else {
@@ -63,9 +88,15 @@ const authController = {
                 email: user.email,
                 googleId: user.googleId,
                 id: user._id,
-            }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
-            resp.cookie('jwtToken', token, { httpOnly: true, secure: true, domain: 'localhost', path: '/' }); 
-
+            }, process.env.JWT_SECRET_KEY, { expiresIn: '1m' });
+            const refreshToken = jwt.sign({
+                    name: user.name,
+                    email: user.email,
+                    id: user._id,
+                }, process.env.JWT_SECRET_KEY, { expiresIn: '7d' });
+            
+            resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
+            resp.cookie('refreshToken', refreshToken, { httpOnly: true, secure: false, path: '/' });
             return resp.status(200).json({ message: "User Authnticated", user: user });
 
         }
@@ -81,14 +112,46 @@ const authController = {
             if(!email){
                 return resp.status(400).json({message: "Email is required"});
             }
-            const user =  await userDao.findByEmail(email);
+            const user = await userDao.findByEmail(email);
             if(!user){
-                return resp.status(200).json({message: "Password reset link sent to email if it exists in our records."});
+                // Don't reveal if user exists or not (security best practice)
+                return resp.status(200).json({message: "If your email is registered, you will receive an OTP shortly."});
             }
-            // store the OTP in DB
-            otp = 
-            emailer.send(email, "Password Reset Request", "The otp is 123456 and u will be redirected to the change password page.");
-            return resp.status(200).json({message: "Password reset link sent to email if it exists in our records."});
+
+            // Rate limiting: Check if user requested OTP recently
+            if (user.resetOtpLastRequest) {
+                const timeSinceLastRequest = (Date.now() - user.resetOtpLastRequest.getTime()) / 1000 / 60;
+                if (timeSinceLastRequest < OTP_RATE_LIMIT_MINUTES) {
+                    return resp.status(429).json({
+                        message: `Please wait ${Math.ceil(OTP_RATE_LIMIT_MINUTES - timeSinceLastRequest)} minute(s) before requesting a new OTP.`
+                    });
+                }
+            }
+
+            // Generate cryptographically secure OTP
+            const otp = generateOtp();
+            
+            // Hash OTP before storing (like a password)
+            const salt = await bcrypt.genSalt(10);
+            const hashedOtp = await bcrypt.hash(otp, salt);
+            
+            // Store hashed OTP with expiry and reset attempts
+            user.resetOtp = hashedOtp;
+            user.resetOtpExpiry = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
+            user.resetOtpAttempts = 0;
+            user.resetOtpLastRequest = new Date();
+            await user.save();
+
+            
+            console.log(`Generated OTP for ${email}: ${otp}`); // For testing purposes only
+            // Send OTP via email
+            //emailer.send(
+            //    email, 
+            //    "Password Reset OTP", 
+            //    `Your OTP for password reset is: ${otp}\n\nThis OTP is valid for ${OTP_EXPIRY_MINUTES} minutes.\nIf you didn't request this, please ignore this email.`
+            //);
+            
+            return resp.status(200).json({message: "If your email is registered, you will receive an OTP shortly."});
         }
         catch(err){
             console.log("Error during password reset", err);
@@ -102,15 +165,65 @@ const authController = {
             if(!email || !newPassword || !otp){
                 return resp.status(400).json({message: "All fields are required"});
             }
-            const user =  await userDao.findByEmail(email);
+
+            // Validate password strength
+            if (newPassword.length < 8) {
+                return resp.status(400).json({message: "Password must be at least 8 characters long"});
+            }
+
+            const user = await userDao.findByEmail(email);
             if(!user){
                 return resp.status(404).json({message: "User not found"});
             }
-            //verify OTP from the db
+
+            // Check if OTP exists
+            if (!user.resetOtp || !user.resetOtpExpiry) {
+                return resp.status(400).json({message: "No OTP request found. Please request a new OTP."});
+            }
+
+            // Check if OTP has expired
+            if (new Date() > user.resetOtpExpiry) {
+                // Clear expired OTP
+                user.resetOtp = undefined;
+                user.resetOtpExpiry = undefined;
+                user.resetOtpAttempts = 0;
+                await user.save();
+                return resp.status(400).json({message: "OTP has expired. Please request a new one."});
+            }
+
+            // Check if max attempts exceeded
+            if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
+                // Clear OTP after max attempts
+                user.resetOtp = undefined;
+                user.resetOtpExpiry = undefined;
+                user.resetOtpAttempts = 0;
+                await user.save();
+                return resp.status(429).json({message: "Too many failed attempts. Please request a new OTP."});
+            }
+
+            // Verify OTP (compare with hashed value)
+            const isOtpValid = await bcrypt.compare(otp, user.resetOtp);
+            if (!isOtpValid) {
+                user.resetOtpAttempts += 1;
+                await user.save();
+                const remainingAttempts = MAX_OTP_ATTEMPTS - user.resetOtpAttempts;
+                return resp.status(400).json({
+                    message: `Invalid OTP. ${remainingAttempts} attempt(s) remaining.`
+                });
+            }
+
+            // OTP is valid - update password
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(newPassword, salt);
             user.password = hashedPassword;
+            
+            // Clear OTP fields after successful password change
+            user.resetOtp = undefined;
+            user.resetOtpExpiry = undefined;
+            user.resetOtpAttempts = 0;
+            user.resetOtpLastRequest = undefined;
             await user.save();
+
             return resp.status(200).json({message: "Password changed successfully."});
 
         }catch(err){
@@ -161,7 +274,7 @@ const authController = {
             id: newUser._id,
         }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
         
-        resp.cookie('jwtToken', token, { httpOnly: true, secure: true, domain: 'localhost', path: '/' }); 
+        resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
         return resp.status(201).json({ message: "User registered successfully", user: { name: newUser.name, email: newUser.email, id: newUser._id } });
     },
 
@@ -169,7 +282,18 @@ const authController = {
         try{
             const token = req.cookies?.jwtToken;
             if(!token) {
-                return resp.status(200).json({ loggedIn: false });
+                const refreshToken = req.cookies?.refreshToken;
+                if(!refreshToken){
+                    //logic for refresh token
+                    return resp.status(400).json({ loggedIn: false });
+                }
+                const token = jwt.sign({
+                    name: newUser.name,
+                    email: newUser.email,
+                    id: newUser._id,
+                }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
+                resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
+                return resp.status(200).json({ message: "User Authnticated", user: user });
             }
             jwt.verify(token, process.env.JWT_SECRET_KEY, (error, user) => {
                 if(error) {

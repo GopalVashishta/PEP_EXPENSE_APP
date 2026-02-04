@@ -1,42 +1,9 @@
 const group = require('../model/group');
-const fs = require('fs');
-const path = require('path');
-
-const auditDir = path.join(__dirname, '..', '..', 'auditLogs');
-
-const ensureAuditDir = () => {
-    if(!fs.existsSync(auditDir)) {
-        fs.mkdirSync(auditDir, { recursive: true });
-    }
-};
-
-const buildAuditPath = (groupId) => path.join(auditDir, `${groupId}_audit.log`);
-
-const _setAuditLog = (groupId, data) => {
-    if(!groupId || !data) return null;
-    ensureAuditDir();
-    const filePath = buildAuditPath(groupId);
-    const entry = `${new Date().toISOString()} - ${data}`;
-    const payload = fs.existsSync(filePath) ? `\n${entry}` : entry;
-    fs.appendFileSync(filePath, payload);
-    return fs.readFileSync(filePath, 'utf-8');
-};
-
-const _getAuditLog = (groupId) => {
-    if(!groupId) return '';
-    ensureAuditDir();
-    const filePath = buildAuditPath(groupId);
-    if(!fs.existsSync(filePath)) {
-        return '';
-    }
-    return fs.readFileSync(filePath, 'utf-8');
-};
 
 const groupDao = {
     create: async (data) =>{
         const newGroup = new group(data);
         const saved = await newGroup.save();
-        _setAuditLog(saved._id, `Group created by ${saved.adminEmail}`);
         return saved;        
     },
 
@@ -45,7 +12,6 @@ const groupDao = {
         const updated = await group.findByIdAndUpdate(groupId,{
             name, description, thumbnail, adminEmail, paymentStatus,
         }, {new: true});
-        _setAuditLog(groupId, `Group updated by ${adminEmail || 'unknown'}`);
         return updated;
     },
 
@@ -53,7 +19,6 @@ const groupDao = {
         const updated = await group.findByIdAndUpdate(groupId, {
             $addToSet: { membersEmail: { $each: membersEmail } }
         }, { new: true });
-        _setAuditLog(groupId, `Members added: ${membersEmail.join(', ')}`);
         return updated;
     },
 
@@ -61,7 +26,6 @@ const groupDao = {
         const updated = await group.findByIdAndUpdate(groupId, {
             $pull: { membersEmail: { $in: membersEmail } }
         }, { new: true });
-        _setAuditLog(groupId, `Members removed: ${membersEmail.join(', ')}`);
         return updated;
     },
 
@@ -79,12 +43,10 @@ const groupDao = {
      * @param {*} groupId
      */
     getAuditLog: async (groupId) =>{
-        return _getAuditLog(groupId);
+        //return _getAuditLog(groupId);
+        const group = await Group.findById(groupId).select('paymentStatus.date');
+        return group ? group.paymentStatus.data: null;
     },
-
-    setAuditLog: async (groupId, data) => {
-        return _setAuditLog(groupId, data);
-    }
 
 }
 
