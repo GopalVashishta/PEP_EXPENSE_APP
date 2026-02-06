@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { ADMIN_ROLE } = require('../utility/userRoles');
 
 const authMiddleware = {
     protect: async (req, resp, next) => {
@@ -13,6 +14,8 @@ const authMiddleware = {
                     id: user.id,
                     email: user.email,
                     name: user.name,
+                    role: user.role ? user.role: ADMIN_ROLE,
+                    adminId : user.adminId ? user.adminId: user._id
                 };
                 next();
             }

@@ -5,7 +5,9 @@ const userSchema = new mongoose.Schema({
     email : {type: String, required: true, unique: true},
     password : {type: String, required: false}, // FOR NOW ITS ONLY TEXT AND !ENCRYPTED
     googleId : {type: String, required: false}, // For Google OAuth Users
-    
+    role: {type: String, required: true},
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+
     // OTP fields for password reset
     resetOtp: {type: String, required: false}, // Hashed OTP
     resetOtpExpiry: {type: Date, required: false}, // OTP expiration time

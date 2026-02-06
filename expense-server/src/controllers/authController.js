@@ -6,7 +6,7 @@ const {OAuth2Client} = require('google-auth-library');
 const emailer = require('../services/emailServices');
 const {validationResult} = require('express-validator');
 const crypto = require('crypto');
-
+const { ADMIN_ROLE } = require('../utility/userRoles');
 // OTP Configuration
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 10;
@@ -34,18 +34,24 @@ const authController = {
             const { email, password } = req.body;
             if(!email || !password) { return resp.status(400).json({ message: "All fields are required" }); }
             const user = await userDao.findByEmail(email);
+            user.role = user.role ? user.role: ADMIN_ROLE;
+            user.adminId = user.adminId ? user.adminId: user._id;
             
             if(user && await bcrypt.compare(password, user.password)) {
                 const token = jwt.sign({
                     name: user.name,
                     email: user.email,
                     id: user._id,
+                    role: user.role ? user.role: ADMIN_ROLE,
+                    adminId: user.adminId
                 }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
 
                 const refreshToken = jwt.sign({
                     name: user.name,
                     email: user.email,
                     id: user._id,
+                    role: user.role ? user.role: ADMIN_ROLE,
+                    adminId: user.adminId
                 }, process.env.JWT_SECRET_KEY, { expiresIn: '7d' });
 
                 resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
@@ -80,19 +86,27 @@ const authController = {
                 user = await userDao.create({
                     name: name,
                     email: email,
-                    googleId: googleId
+                    googleId: googleId,
+                    role: ADMIN_ROLE
                 });
+                // Set adminId to the newly created user's own _id
+                user.adminId = user._id;
+                await user.save();
             }
             const token = jwt.sign({
                 name: user.name,
                 email: user.email,
                 googleId: user.googleId,
                 id: user._id,
-            }, process.env.JWT_SECRET_KEY, { expiresIn: '1m' });
+                role: user.role ? user.role: ADMIN_ROLE,
+                adminId : user.adminId ? user.adminId: user._id
+            }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
             const refreshToken = jwt.sign({
                     name: user.name,
                     email: user.email,
                     id: user._id,
+                    role: user.role ? user.role: ADMIN_ROLE,
+                    adminId : user.adminId ? user.adminId: user._id
                 }, process.env.JWT_SECRET_KEY, { expiresIn: '7d' });
             
             resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
@@ -183,7 +197,6 @@ const authController = {
 
             // Check if OTP has expired
             if (new Date() > user.resetOtpExpiry) {
-                // Clear expired OTP
                 user.resetOtp = undefined;
                 user.resetOtpExpiry = undefined;
                 user.resetOtpAttempts = 0;
@@ -193,7 +206,6 @@ const authController = {
 
             // Check if max attempts exceeded
             if (user.resetOtpAttempts >= MAX_OTP_ATTEMPTS) {
-                // Clear OTP after max attempts
                 user.resetOtp = undefined;
                 user.resetOtpExpiry = undefined;
                 user.resetOtpAttempts = 0;
@@ -255,7 +267,7 @@ const authController = {
         const hashedPassword = await bcrypt.hash(password, salt);
 
         //Creating new user with Error handling
-        const newUser = await userDao.create({ name: username, email, password: hashedPassword})
+        const newUser = await userDao.create({ name: username, email, password: hashedPassword, role: ADMIN_ROLE })
             .then((user) => user)
             .catch((err) => {
                 if(err.code === 'INVALID_USER_DATA') {
@@ -272,6 +284,8 @@ const authController = {
             name: newUser.name,
             email: newUser.email,
             id: newUser._id,
+            role: user.role ? user.role: ADMIN_ROLE,
+            adminId : user.adminId ? user.adminId: user._id
         }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
         
         resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
@@ -291,6 +305,8 @@ const authController = {
                     name: newUser.name,
                     email: newUser.email,
                     id: newUser._id,
+                    role: user.role ? user.role: ADMIN_ROLE,
+                    adminId : user.adminId ? user.adminId: user._id
                 }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
                 resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
                 return resp.status(200).json({ message: "User Authnticated", user: user });

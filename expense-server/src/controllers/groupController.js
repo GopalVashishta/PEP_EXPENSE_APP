@@ -1,7 +1,7 @@
 const groupDao = require('../dao/groupDao');
 
 const groupController = {
-    createGroup: async (req, resp) => {
+    create: async (req, resp) => {
         try{
             const user = req.user;
             const {name, description, memberEmail, thumbnail} = req.body;
@@ -19,7 +19,9 @@ const groupController = {
                 thumbnail,
                 paymentStatus: {
                     amount: 0,
-                    currency: 'INR'
+                    currency: 'INR',
+                    date: Date.now(),
+                    isPaid: false
                 }
             });
             return resp.status(201).json({ message: "Group created successfully", group: newGroup._id });
@@ -36,7 +38,7 @@ const groupController = {
             if(!updateGroup){
                 return resp.status(404).json({message: "Group not found"});
             }
-            return resp.status(200).json({ message: "Group updated successfully", group: updateGroup });
+            return resp.status(200).json(updateGroup);
         }
         catch(err) {
             console.log("Error updating group", err);
@@ -46,11 +48,11 @@ const groupController = {
 
     addMembers: async (req, resp) =>{
         try{
-            const {groupId, membersEmail} = req.body;
-            if(!groupId || !membersEmail || !Array.isArray(membersEmail) || membersEmail.length === 0) {
+            const {groupId, emails} = req.body;
+            if(!groupId || !emails || !Array.isArray(emails) || emails.length === 0) {
                 return resp.status(400).json({ message: "Group ID and Members Email are required" });
             }
-            const updateGroup = await groupDao.addMember(groupId, ...membersEmail);
+            const updateGroup = await groupDao.addMember(groupId, ...emails);
             return resp.status(200).json({message: "Members added successfully", group: updateGroup });
         }
         catch(err) {
@@ -61,11 +63,11 @@ const groupController = {
 
     removeMembers: async (req, resp) => {
         try{
-            const {groupId, membersEmail} = req.body;
-            if(!groupId || !membersEmail || !Array.isArray(membersEmail) || membersEmail.length === 0) {
+            const {groupId, emails} = req.body;
+            if(!groupId || !emails || !Array.isArray(emails) || emails.length === 0) {
                 return resp.status(400).json({ message: "Group ID and Members Email are required" });
             }
-            const updateGroup = await groupDao.removeMembers(groupId, ...membersEmail);
+            const updateGroup = await groupDao.removeMembers(groupId, ...emails);
             return resp.status(200).json({message: "Members removed successfully", group: updateGroup });
         }
         catch(err) {
@@ -91,13 +93,11 @@ const groupController = {
 
     getGroupByPaymentStatus: async (req, resp) => {
         try{
-            const {email, status} = req.body;
-            if(!email || typeof status !== 'boolean') {
-                return resp.status(400).json({ message: "Email and valid status are required" });
-            }
+            const {isPaid} = req.query;
+            const status = isPaid === 'true';
             const getGroup = await groupDao.getGroupByStatus(email, status);
             // TODO: SHOW ON FRONTEND
-            return resp.status(200).json({ message: "Groups fetched successfully", groups: getGroup });
+            return resp.status(200).json(getGroup);
         }
         catch(err) {
             console.log("Error fetching groups by status", err);
@@ -105,7 +105,7 @@ const groupController = {
         }
     },  
 
-    getAuditLog: async (req, resp) => {
+    getAudit: async (req, resp) => {
         try{
             const {groupId} = req.body;
             if(!groupId) {
@@ -113,7 +113,7 @@ const groupController = {
             }
             const auditLog = await groupDao.getAuditLog(groupId);
             //TODO: SHOW ON FRONTEND
-            return resp.status(200).json({ message: "Audit log fetched successfully", auditLog });
+            return resp.status(200).json({ auditLog });
         }
         catch(err) {
             console.log("Error fetching audit log", err);
