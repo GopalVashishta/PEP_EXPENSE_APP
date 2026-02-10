@@ -7,6 +7,7 @@ const userSchema = new mongoose.Schema({
     googleId : {type: String, required: false}, // For Google OAuth Users
     role: {type: String, required: true},
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
+    credits: {type: Number, default:1 }, //free credit to create 1 group
 
     // OTP fields for password reset
     resetOtp: {type: String, required: false}, // Hashed OTP
