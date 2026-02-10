@@ -24,7 +24,7 @@ app.use(express.json()); //MiddleWare converts json to jsobj
 app.use(cookieParser()); // cookies to js obj
 app.use('/auth', authRoutes);
 app.use('/group', groupRoutes);
-app.use('/rbac', arbacRoutes);
+app.use('/users', arbacRoutes);
 
 /*    
 //now in authController(src foler content)

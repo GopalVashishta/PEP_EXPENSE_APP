@@ -298,24 +298,29 @@ const authController = {
             if(!token) {
                 const refreshToken = req.cookies?.refreshToken;
                 if(!refreshToken){
-                    //logic for refresh token
                     return resp.status(400).json({ loggedIn: false });
                 }
-                const token = jwt.sign({
-                    name: newUser.name,
-                    email: newUser.email,
-                    id: newUser._id,
-                    role: user.role ? user.role: ADMIN_ROLE,
-                    adminId : user.adminId ? user.adminId: user._id
-                }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
-                resp.cookie('jwtToken', token, { httpOnly: true, secure: false, path: '/' }); 
-                return resp.status(200).json({ message: "User Authnticated", user: user });
+                // Verify refresh token and extract user data
+                try {
+                    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET_KEY);
+                    const newToken = jwt.sign({
+                        name: decoded.name,
+                        email: decoded.email,
+                        id: decoded.id,
+                        role: decoded.role ? decoded.role : ADMIN_ROLE,
+                        adminId: decoded.adminId ? decoded.adminId : decoded.id
+                    }, process.env.JWT_SECRET_KEY, { expiresIn: '1h' });
+                    resp.cookie('jwtToken', newToken, { httpOnly: true, secure: false, path: '/' }); 
+                    return resp.status(200).json({ message: "User Authenticated", user: decoded });
+                } catch (refreshErr) {
+                    return resp.status(401).json({ loggedIn: false, message: "Invalid refresh token" });
+                }
             }
             jwt.verify(token, process.env.JWT_SECRET_KEY, (error, user) => {
                 if(error) {
-                    return resp.status(401).json({ messaage: "Invalid token" });
+                    return resp.status(401).json({ message: "Invalid token" });
                 }
-            return resp.status(200).json({ user: user });
+                return resp.status(200).json({ user: user });
             });
         }
         catch(err){

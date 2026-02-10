@@ -43,11 +43,27 @@ const groupDao = {
      * @param {*} groupId
      */
     getAuditLog: async (groupId) =>{
-        //return _getAuditLog(groupId);
-        const group = await Group.findById(groupId).select('paymentStatus.date');
+        const group = await group.findById(groupId).select('paymentStatus.date');
         return group ? group.paymentStatus.data: null;
     },
+    // Default sorted by createdAt desc(recent first)
+    getGroupsPaginated: async (email, limit, skip, sortOptions={ createdAt: -1}) => {
+        // limits = page-size, skip/Offset = where to start, coz if some already loaded skip them
+        
+        const[groups,totalCount] = await Promise.all([
+            // Find groups with given email,
+            // sort them to preserve order across pages,
+            // skip and limit to get results of desired page.
+            group.find({membersEmail: email})
+                 .sort(sortOptions)
+                 .skip(skip)
+                 .limit(limit),
+            // Count the no. of records in the collection
+            group.countDocuments({membersEmail: email})
+        ]); // async+await executes 2 in sequence, but promise both in parallel
 
+        return {groups, totalCount};
+    },
 }
 
 module.exports = groupDao;

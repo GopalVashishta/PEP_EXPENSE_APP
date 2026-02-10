@@ -79,11 +79,28 @@ const groupController = {
     getGroupByUser: async (req, resp) => {
         try{
             const email = req.user.email; // sent via authMiddleware
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
             if(!email) {
                 return resp.status(400).json({ message: "Email and valid status are required" });
             }
-            const getGroup = await groupDao.getGroupByEmail(email);
-            return resp.status(200).json({ message: "Groups fetched successfully", groups: getGroup });
+
+            const sortBy = req.query.sortBy || 'newest';
+            let sortOptions = {createdAt: -1};
+            if(sortBy === 'oldest'){
+                sortOptions = {createdAt: 1};
+            }
+            const { groups, totalCount } = await groupDao.getGroupsPaginated(email, limit, skip, sortOptions);
+            resp.status(200).json({
+                groups: groups,
+                pagination: {
+                    totalItems: totalCount,
+                    totalPages: Math.ceil(totalCount/limit),
+                    currentPage: page,
+                    itemsPerPage: limit
+                }
+            });
         }
         catch(err) {
             console.log("Error fetching groups by status", err);
