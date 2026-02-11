@@ -15,7 +15,7 @@ const authMiddleware = {
                     email: user.email,
                     name: user.name,
                     role: user.role ? user.role: ADMIN_ROLE,
-                    adminId : user.adminId ? user.adminId: user._id
+                    adminId : user.adminId ? user.adminId: user.id
                 };
                 next();
             }

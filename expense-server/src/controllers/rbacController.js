@@ -11,9 +11,9 @@ const rbacController = {
             const { name, email, role } = request.body;
 
 
-            if (!USER_ROLES.include(role)) {
+            if (!USER_ROLES.includes(role.toLowerCase())) {
                 return response.status(400).json({
-                    message: 'Invalid ROle'
+                    message: 'Invalid Role'
                 });
             }
             
@@ -21,10 +21,11 @@ const rbacController = {
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(tempPassword, salt);
 
-            const user = await rbacDao.create(email, name, role, hashedPassword, adminUser._id);
+            const user = await rbacDao.create(email, name, role.toLowerCase(), hashedPassword, adminUser.id);
 
 
             //send temporary password in email
+            /*
             try {
                 await emailService.send(
                     email, 'Temporary Password',
@@ -33,6 +34,7 @@ const rbacController = {
             } catch (error) {
                 console.log(error);
             }
+            */
 
             return response.status(200).json({
                 message: "User Created!!",
@@ -48,7 +50,7 @@ const rbacController = {
     update: async (request, response) => {
         try {
             const { name, role, userId } = request.body;
-            const user = await rbacDao.update(userId, name, role);
+            const user = await rbacDao.update(userId, name, role.toLowerCase());
 
             return response.status(200).json({
                 message: "User Updated!!",
@@ -66,7 +68,7 @@ const rbacController = {
 
             return response.status(200).json({
                 message: "User Deleted!!",
-                user: user
+                userId: userId
             });
         } catch (error) {
             console.error(error);
@@ -79,7 +81,7 @@ const rbacController = {
             const users = await rbacDao.getUsersByAdminId(adminId);
 
             return response.status(200).json({
-                user: users
+                users: users
             });
         } catch (error) {
             console.error(error);

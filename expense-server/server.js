@@ -6,6 +6,7 @@ const groupRoutes = require('./src/routes/groupRoutes');
 const arbacRoutes = require('./src/routes/rbacRoutes');
 const paymentRoutes = require('./src/routes/paymentRoutes');  
 const profileRoutes = require('./src/routes/profileRoutes'); // to get user info in profile page
+const expenseRoutes = require('./src/routes/expenseRoutes'); // expense management routes
 const cookieParser = require('cookie-parser');
 const cors = require('cors'); //cors policy error by the browser @frontend
 const PORT = 5001;
@@ -22,7 +23,13 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions)); // cors Error solution
-app.use(express.json()); //MiddleWare converts json to jsobj
+//app.use(express.json()); //MiddleWare converts json to jsobj + for payment we want raw data
+app.use((req, res, next) => {
+  if(req.originalUrl.startsWith('/payment/webhook')) { // we need raw data for signature reconstruction
+    next();
+  }
+  express.json()(req, res, next);
+});
 app.use(cookieParser()); // cookies to js obj
 
 app.use('/auth', authRoutes);
@@ -30,6 +37,7 @@ app.use('/group', groupRoutes);
 app.use('/users', arbacRoutes);
 app.use('/payment', paymentRoutes);
 app.use('/profile', profileRoutes);
+app.use('/expense', expenseRoutes);
 
 app.listen(PORT, (err) => {
     console.log(`Server is running on port ${PORT}`);

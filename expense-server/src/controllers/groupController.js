@@ -1,11 +1,11 @@
 const groupDao = require('../dao/groupDao');
-const usersController = require('./profileController');
+const userDao = require('../dao/userDao');
 
 const groupController = {
     create: async (req, resp) => {
         try{
             const user = req.user;
-            const userInfo = await usersController.getUserInfo(user.email);
+            const userInfo = await userDao.findByEmail(user.email);
             if(userInfo.credits  === undefined) {
                 userInfo.credits = 1; //for backward compatibility, if already exisiting user doesn't have enough creds
             }
@@ -13,13 +13,13 @@ const groupController = {
                 return resp.status(400).json({ message: "Insufficient credits to create a group" });
             }
             
-            const {name, description, memberEmail, thumbnail} = req.body;
+            const {name, description, membersEmail, thumbnail} = req.body;
             if(!name || !user.email) {
                 return resp.status(400).json({ message: "Name and Admin Email are required" });
             }
             let allmembers = [user.email];
-            if(memberEmail && Array.isArray(memberEmail)) {
-                allmembers = [... new Set([user.email, ...memberEmail])];
+            if(membersEmail && Array.isArray(membersEmail)) {
+                allmembers = [... new Set([user.email, ...membersEmail])];
             }
             const newGroup = await groupDao.create({
                 name,
